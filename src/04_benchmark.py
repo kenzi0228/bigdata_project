@@ -1,4 +1,4 @@
-"""Etape 4 : comparaison de 3 moteurs (pandas, DuckDB, Spark local) sur la meme agregation.
+"""Etape 4 : comparaison de moteurs (pandas, DuckDB, Polars, + Spark local si Java present) sur la meme agregation.
 
 Mesure le temps de l'agregation "taux de retard > 15 min par liaison et par annee"
 sur le fichier reel (x1) puis sur une copie repliquee 100 fois (x100) pour estimer
@@ -16,13 +16,20 @@ src = sys.argv[1] if len(sys.argv) > 1 else "data/regularite-mensuelle-tgv-aqst.
 big = "data/tgv_x100.csv"
 N_RUNS = 3
 
-# Fabrication du fichier x100 (on repete les lignes de donnees 100 fois)
+COLS = ["date", "gare_depart", "gare_arrivee", "nb_train_prevu", "nb_annulation", "nb_train_retard_sup_15"]
+
+# Fabrication du fichier x100 : on recopie 100 fois le corps du CSV (sans tout charger en memoire)
 if not os.path.exists(big):
-    pd.concat([pd.read_csv(src, sep=";")] * 100).to_csv(big, sep=";", index=False)
+    with open(src, encoding="utf-8") as f:
+        header, body = f.readline(), f.read()
+    with open(big, "w", encoding="utf-8") as out:
+        out.write(header)
+        for _ in range(100):
+            out.write(body if body.endswith("\n") else body + "\n")
 
 
 def run_pandas(path):
-    df = pd.read_csv(path, sep=";")
+    df = pd.read_csv(path, sep=";", usecols=COLS)
     df["annee"] = df["date"].str[:4]
     df["circ"] = df.nb_train_prevu - df.nb_annulation
     return df.groupby(["gare_depart", "gare_arrivee", "annee"])[["circ", "nb_train_retard_sup_15"]].sum()
@@ -33,6 +40,15 @@ def run_duckdb(path):
         SELECT gare_depart, gare_arrivee, left(date, 4) annee,
                sum(nb_train_prevu - nb_annulation) circ, sum(nb_train_retard_sup_15) r15
         FROM read_csv('{path}', delim=';', header=true) GROUP BY ALL""").df()
+
+
+def run_polars(path):
+    import polars as pl
+    return (pl.read_csv(path, separator=";", columns=COLS, infer_schema_length=10000)
+              .with_columns(pl.col("date").str.slice(0, 4).alias("annee"),
+                            (pl.col("nb_train_prevu") - pl.col("nb_annulation")).alias("circ"))
+              .group_by("gare_depart", "gare_arrivee", "annee")
+              .agg(pl.col("circ").sum(), pl.col("nb_train_retard_sup_15").sum()))
 
 
 spark = None
@@ -51,10 +67,15 @@ try:
                   .agg(F.sum(F.col("nb_train_prevu") - F.col("nb_annulation")).alias("circ"),
                        F.sum("nb_train_retard_sup_15").alias("r15"))
                   .toPandas())
-except Exception as e:  # pyspark absent ou Java absent
+except BaseException as e:  # pyspark absent ou Java absent
     print(f"Spark indisponible ({e.__class__.__name__}), benchmark sans Spark")
 
 engines = {"pandas": run_pandas, "duckdb": run_duckdb}
+try:
+    import polars  # noqa: F401
+    engines["polars"] = run_polars
+except ImportError:
+    print("Polars non installe, ignore")
 if spark:
     engines["spark"] = run_spark
 

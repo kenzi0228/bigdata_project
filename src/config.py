@@ -1,8 +1,8 @@
 """Configuration commune : chemins S3 et connexion DuckDB."""
 import os
 
-# Sur Onyxia, le bucket personnel porte le nom de l'utilisateur (namespace "user-<id>")
-BUCKET = os.environ.get("BUCKET") or os.environ.get("KUBERNETES_NAMESPACE", "user-local").replace("user-", "")
+# Sur l'Onyxia Adaltas, le bucket personnel porte le nom du namespace (ex: user-m-lali-ece)
+BUCKET = os.environ.get("BUCKET") or os.environ.get("KUBERNETES_NAMESPACE", "user-local")
 # ROOT permet de tester en local (ex: ROOT=/tmp/test) sans toucher a S3
 ROOT = os.environ.get("ROOT", f"s3://{BUCKET}/bigdata_project")
 
@@ -25,7 +25,7 @@ def duckdb_connect():
                 KEY_ID '{os.environ["AWS_ACCESS_KEY_ID"]}',
                 SECRET '{os.environ["AWS_SECRET_ACCESS_KEY"]}',
                 SESSION_TOKEN '{os.environ.get("AWS_SESSION_TOKEN", "")}',
-                ENDPOINT '{os.environ.get("AWS_S3_ENDPOINT", "minio.lab.sspcloud.fr")}',
+                ENDPOINT '{os.environ.get("AWS_S3_ENDPOINT", "s3.seaweedfs.adm.adaltas.cloud")}',
                 REGION '{os.environ.get("AWS_DEFAULT_REGION", "us-east-1")}',
                 URL_STYLE 'path'
             );""").fetchall()
@@ -40,5 +40,5 @@ def s3fs_options():
         "key": os.environ["AWS_ACCESS_KEY_ID"],
         "secret": os.environ["AWS_SECRET_ACCESS_KEY"],
         "token": os.environ.get("AWS_SESSION_TOKEN"),
-        "client_kwargs": {"endpoint_url": "https://" + os.environ.get("AWS_S3_ENDPOINT", "minio.lab.sspcloud.fr")},
+        "client_kwargs": {"endpoint_url": "https://" + os.environ.get("AWS_S3_ENDPOINT", "s3.seaweedfs.adm.adaltas.cloud")},
     }

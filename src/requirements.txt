@@ -2,3 +2,4 @@ duckdb>=1.1
 pandas
 pyarrow
 s3fs
+polars
