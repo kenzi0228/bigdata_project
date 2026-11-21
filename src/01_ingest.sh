@@ -12,6 +12,8 @@ curl -sSL "$URL" -o data/$FILE
 echo "Taille du fichier brut : $(du -h data/$FILE | cut -f1) ($(stat -c %s data/$FILE) octets), $(wc -l < data/$FILE) lignes physiques"
 sha256sum data/$FILE | tee data/$FILE.sha256
 
+# le bucket personnel n'existe pas tant qu'on n'y a rien ecrit : on le cree si besoin
+s3 ls s3://$BUCKET/ >/dev/null 2>&1 || s3 mb s3://$BUCKET
 s3 cp data/$FILE        $S3_PREFIX/raw/$FILE
 s3 cp data/$FILE.sha256 $S3_PREFIX/raw/$FILE.sha256
 s3 ls --recursive --human-readable $S3_PREFIX/raw/
